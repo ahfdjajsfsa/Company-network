@@ -1,0 +1,79 @@
+% 使用 XeLaTeX 编译。
+\documentclass[UTF8,a4paper]{ctexart}
+
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{indentfirst}
+
+% 格式要求中未给出页边距，这里仅设置为常见 A4 报告页边距。
+\geometry{
+  left=2.5cm,
+  right=2.5cm,
+  top=2.5cm,
+  bottom=2.5cm
+}
+
+\pagestyle{plain}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0pt}
+
+% 正文：中文采用宋体五号字。
+\AtBeginDocument{\songti\zihao{5}}
+
+% 一级标题：四号黑体，上下各空一行。
+\ctexset{
+  section = {
+    format = {\heiti\zihao{4}},
+    beforeskip = \baselineskip,
+    afterskip = \baselineskip
+  }
+}
+
+% ===== 基本信息占位 =====
+\newcommand{\ReportTitle}{题目}
+\newcommand{\ReportAuthor}{作者名}
+\newcommand{\ReportCollege}{计算机与软件学院}
+\newcommand{\ReportMajor}{专业}
+\newcommand{\ReportClass}{年级班}
+\newcommand{\ReportAbstract}{}
+\newcommand{\ReportKeywords}{关键词一；关键词二；关键词三}
+
+% ===== 标题、作者、学院专业班级、摘要和关键词 =====
+\newcommand{\MakeReportHeader}{
+  \begin{center}
+    {\heiti\zihao{3}\ReportTitle\par}
+    \vspace{\baselineskip}
+    {\songti\zihao{5}\ReportAuthor\par}
+    {\songti\zihao{-5}\ReportCollege，\ReportMajor，\ReportClass\par}
+  \end{center}
+  \vspace{\baselineskip}
+  {\noindent\fangsong\zihao{-5}摘\quad 要：\ReportAbstract\par}
+  \vspace{0.5\baselineskip}
+  {\noindent\songti\zihao{-5}关键词：\ReportKeywords\par}
+  \vspace{\baselineskip}
+}
+
+% ===== 参考文献：五号宋体加粗，居左，前空两格 =====
+\newenvironment{ReportReferences}{
+  \vspace{\baselineskip}
+  \noindent\hspace{2em}{\songti\bfseries\zihao{5}参考文献}\par
+  \vspace{0.5\baselineskip}
+  \begin{enumerate}[label={[\arabic*]}, leftmargin=4em, itemsep=0pt]
+}{
+  \end{enumerate}
+}
+
+\begin{document}
+
+\MakeReportHeader
+
+% 正文从这里开始。
+% \section{一级标题}
+% 正文内容。
+
+% 参考文献示例：
+% \begin{ReportReferences}
+%   \item 作者. 文献题名[M]. 出版地：出版社，年份.
+% \end{ReportReferences}
+
+\end{document}
