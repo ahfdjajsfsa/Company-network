@@ -2,105 +2,229 @@
 
 ## 1. 搭建目标
 
-本仿真用于实现一个基础校园网络拓扑，主要完成以下功能：
+本仿真用于实现一个中小型企业网络，企业包含行政楼、销售部和生产厂区三个建筑，中心机房位于行政楼。仿真重点验证以下功能：
 
-1. 教学区、办公区、宿舍区、图书馆等不同区域终端接入。
-2. 使用 VLAN 对不同区域进行逻辑隔离。
-3. 通过三层核心交换机实现跨 VLAN 通信。
-4. 通过服务器区提供 DNS、WWW、FTP、MAIL 等基础服务。
-5. 通过出口路由器预留外部网络访问能力。
+1. 行政楼 6 个部门、销售部 5 个团队、生产厂区 3 个车间分别接入独立 VLAN，彼此不能二层通信。
+2. 三层核心交换机提供各 VLAN 网关，实现必要的跨 VLAN 三层通信。
+3. 内部服务器区部署 DNS、数据库服务器和重要业务服务器，外部网络不能直接访问。
+4. DMZ 对外服务区部署 WWW 和 MAIL，内部用户与外部用户均可访问。
+5. 出口路由器连接外部网络，并通过 ACL 模拟边界防火墙。
 
 ## 2. 设备准备
 
 在 Cisco Packet Tracer 中放置以下设备：
 
-| 设备类型 | 推荐设备 | 数量 | 用途 |
-| --- | --- | ---: | --- |
-| 路由器 | Router 2911 / 1941 | 1 | 作为校园网出口路由器 |
-| 三层交换机 | Multilayer Switch 3560 | 1 | 作为核心交换机，负责 VLAN 网关和三层转发 |
-| 二层交换机 | Switch 2960 | 2 | 作为接入交换机，连接不同区域终端 |
-| 服务器 | Server | 4 | 分别模拟 DNS、WWW、FTP、MAIL 服务 |
-| 终端 | PC | 4-8 | 模拟教学区、办公区、宿舍区、图书馆用户 |
-| 外部服务器 | Server 或 Cloud | 1，可选 | 模拟外部网络或 Internet 服务 |
+| 设备类型 | 推荐设备 | 数量 | 命名建议 | 用途 |
+| --- | --- | ---: | --- | --- |
+| 路由器 | Router 2911 / 1941 | 1 | EDGE | 企业出口、NAT、边界 ACL |
+| 三层交换机 | Multilayer Switch 3560 | 1 | CORE | VLAN 网关、三层路由、服务器汇聚 |
+| 二层交换机 | Switch 2960 | 3 | ADMIN-ASW、SALES-ASW、PROD-ASW | 三个建筑/区域的接入交换机 |
+| 服务器 | Server | 5 | DNS、DB、APP、WWW、MAIL | 内部服务和对外服务 |
+| 终端 | PC | 14-15 | GM-PC、SALES1-PC、WS1-PC 等 | 每个 VLAN 至少一台测试终端 |
+| 外部终端 | PC 或 Server | 1 | External-PC | 模拟外部网络用户 |
+
+如果设备数量较多，可以先搭建最小验证版：行政楼选 2 个部门、销售部选 2 个团队、生产厂区选 1 个车间，再补齐所有 VLAN。
 
 ## 3. 拓扑连接
 
-按照以下结构连接设备：
+推荐拓扑如下：
 
 ```text
-Internet/外部服务器
-        |
-      Router
-        |
-   Core Switch
-    /   |    \
-ASW1  ASW2  Server区
- / \    / \
-教学 办公 宿舍 图书馆
+External-PC
+    |
+  EDGE
+    |
+  CORE
+  /  |   |       |         \
+ /   |   |       |          \
+ADMIN SALES PROD 内部服务器区  DMZ服务区
+ ASW   ASW  ASW  DNS/DB/APP   WWW/MAIL
 ```
 
 建议连接方式如下：
 
-| 连接对象 | 接口示例 | 说明 |
+| 连接对象 | 接口示例 | 链路/端口类型 |
 | --- | --- | --- |
-| Router ↔ Core Switch | Router G0/0 ↔ Core G0/1 | 出口三层链路 |
-| Core Switch ↔ ASW1 | Core F0/1 ↔ ASW1 F0/24 | Trunk 链路 |
-| Core Switch ↔ ASW2 | Core F0/2 ↔ ASW2 F0/24 | Trunk 链路 |
-| Core Switch ↔ 服务器 | Core F0/3-F0/6 | 服务器区接入 VLAN 50 |
-| ASW1 ↔ 教学区 PC | ASW1 F0/1 | Access，VLAN 10 |
-| ASW1 ↔ 办公区 PC | ASW1 F0/2 | Access，VLAN 20 |
-| ASW2 ↔ 宿舍区 PC | ASW2 F0/1 | Access，VLAN 30 |
-| ASW2 ↔ 图书馆 PC | ASW2 F0/2 | Access，VLAN 40 |
+| EDGE G0/0 ↔ CORE G0/1 | 192.168.100.1/30 ↔ 192.168.100.2/30 | 三层链路 |
+| EDGE G0/1 ↔ External-PC | 200.1.1.1/24 ↔ 200.1.1.10/24 | 外部网络 |
+| CORE F0/1 ↔ ADMIN-ASW F0/24 | Trunk | 允许 VLAN 10-15、99 |
+| CORE F0/2 ↔ SALES-ASW F0/24 | Trunk | 允许 VLAN 20-24、99 |
+| CORE F0/3 ↔ PROD-ASW F0/24 | Trunk | 允许 VLAN 30-32、99 |
+| CORE F0/4 ↔ DNS Server | Access | VLAN 50 |
+| CORE F0/5 ↔ DB Server | Access | VLAN 50 |
+| CORE F0/6 ↔ APP Server | Access | VLAN 50 |
+| CORE F0/7 ↔ WWW Server | Access | VLAN 60 |
+| CORE F0/8 ↔ MAIL Server | Access | VLAN 60 |
+| CORE F0/9 ↔ MGMT-PC | Access | VLAN 99 |
 
-## 4. VLAN 规划
+接入交换机终端连接建议：
 
-| VLAN ID | VLAN 名称 | 区域 | 网段 | 网关 |
+| 接入交换机 | 端口 | VLAN | 连接对象 |
+| --- | --- | ---: | --- |
+| ADMIN-ASW | F0/1-F0/6 | 10-15 | 总经理、人力、财务、技术、工会、保卫后勤 PC |
+| SALES-ASW | F0/1-F0/5 | 20-24 | 销售一队至销售五队 PC |
+| PROD-ASW | F0/1-F0/3 | 30-32 | 一车间至三车间 PC |
+
+## 4. VLAN 与地址规划
+
+| VLAN | 名称 | 区域 | 网段 | 网关 |
 | --- | --- | --- | --- | --- |
-| VLAN 10 | TEACHING | 教学区 | 192.168.10.0/24 | 192.168.10.1 |
-| VLAN 20 | OFFICE | 办公区 | 192.168.20.0/24 | 192.168.20.1 |
-| VLAN 30 | DORMITORY | 宿舍区 | 192.168.30.0/24 | 192.168.30.1 |
-| VLAN 40 | LIBRARY | 图书馆 | 192.168.40.0/24 | 192.168.40.1 |
-| VLAN 50 | SERVER | 服务器区 | 192.168.50.0/24 | 192.168.50.1 |
-| VLAN 99 | MANAGEMENT | 管理区 | 192.168.99.0/24 | 192.168.99.1 |
+| 10 | ADMIN_GM | 总经理办公室 | 192.168.10.0/24 | 192.168.10.1 |
+| 11 | ADMIN_HR | 人力资源部 | 192.168.11.0/24 | 192.168.11.1 |
+| 12 | ADMIN_FINANCE | 财务部 | 192.168.12.0/24 | 192.168.12.1 |
+| 13 | ADMIN_TECH | 技术部 | 192.168.13.0/24 | 192.168.13.1 |
+| 14 | ADMIN_UNION | 工会 | 192.168.14.0/24 | 192.168.14.1 |
+| 15 | ADMIN_SEC_LOG | 保卫和后勤 | 192.168.15.0/24 | 192.168.15.1 |
+| 20 | SALES_T1 | 销售一队 | 192.168.20.0/24 | 192.168.20.1 |
+| 21 | SALES_T2 | 销售二队 | 192.168.21.0/24 | 192.168.21.1 |
+| 22 | SALES_T3 | 销售三队 | 192.168.22.0/24 | 192.168.22.1 |
+| 23 | SALES_T4 | 销售四队 | 192.168.23.0/24 | 192.168.23.1 |
+| 24 | SALES_T5 | 销售五队 | 192.168.24.0/24 | 192.168.24.1 |
+| 30 | PROD_WS1 | 一车间 | 192.168.30.0/24 | 192.168.30.1 |
+| 31 | PROD_WS2 | 二车间 | 192.168.31.0/24 | 192.168.31.1 |
+| 32 | PROD_WS3 | 三车间 | 192.168.32.0/24 | 192.168.32.1 |
+| 50 | SERVER_IN | 内部服务器区 | 192.168.50.0/24 | 192.168.50.1 |
+| 60 | DMZ_SERVICE | 对外服务区 | 192.168.60.0/24 | 192.168.60.1 |
+| 99 | MANAGEMENT | 网络管理区 | 192.168.99.0/24 | 192.168.99.1 |
 
-## 5. 配置接入交换机
+## 5. 搭建流程
 
-### 5.1 ASW1 配置
+### 5.1 放置并重命名设备
+
+1. 放置 1 台 Router，命名为 `EDGE`。
+2. 放置 1 台 Multilayer Switch，命名为 `CORE`。
+3. 放置 3 台 2960 交换机，命名为 `ADMIN-ASW`、`SALES-ASW`、`PROD-ASW`。
+4. 放置 5 台服务器，命名为 `DNS Server`、`DB Server`、`APP Server`、`WWW Server`、`MAIL Server`。
+5. 每个部门、团队和车间至少放置 1 台 PC，用于代表该 VLAN 的用户。
+6. 放置 1 台 `External-PC`，模拟外部网络访问者。
+
+### 5.2 连接设备
+
+按第 3 节拓扑表连接设备。交换机之间使用 Copper Straight-Through 通常也可正常工作，Packet Tracer 会自动适配；如果链路不亮，可尝试交叉线或等待端口转发状态恢复。
+
+### 5.3 配置核心交换机
+
+在 CORE 中执行 `configs/设备配置说明.md` 的核心交换机配置，主要包括：
+
+1. 开启 `ip routing`。
+2. 创建 VLAN 10-15、20-24、30-32、50、60、99。
+3. 为每个 VLAN 配置 SVI 网关。
+4. 将 F0/1、F0/2、F0/3 配置为 Trunk。
+5. 将服务器端口划入 VLAN 50 或 VLAN 60。
+6. 配置 G0/1 到 EDGE 的三层链路和默认路由。
+
+核心交换机完成后，可使用以下命令检查：
+
+```cisco
+show vlan brief
+show ip interface brief
+show ip route
+```
+
+### 5.4 配置接入交换机
+
+分别在 ADMIN-ASW、SALES-ASW、PROD-ASW 中执行对应配置。
+
+ADMIN-ASW：
 
 ```cisco
 enable
 configure terminal
-
+hostname ADMIN-ASW
 vlan 10
- name TEACHING
-vlan 20
- name OFFICE
+ name ADMIN_GM
+vlan 11
+ name ADMIN_HR
+vlan 12
+ name ADMIN_FINANCE
+vlan 13
+ name ADMIN_TECH
+vlan 14
+ name ADMIN_UNION
+vlan 15
+ name ADMIN_SEC_LOG
+vlan 99
+ name MANAGEMENT
+
+interface range fastEthernet0/1 - 6
+ switchport mode access
 
 interface fastEthernet0/1
- switchport mode access
  switchport access vlan 10
-
 interface fastEthernet0/2
- switchport mode access
- switchport access vlan 20
+ switchport access vlan 11
+interface fastEthernet0/3
+ switchport access vlan 12
+interface fastEthernet0/4
+ switchport access vlan 13
+interface fastEthernet0/5
+ switchport access vlan 14
+interface fastEthernet0/6
+ switchport access vlan 15
 
 interface fastEthernet0/24
  switchport mode trunk
+ switchport trunk allowed vlan 10-15,99
 
 end
 write
 ```
 
-### 5.2 ASW2 配置
+SALES-ASW：
 
 ```cisco
 enable
 configure terminal
+hostname SALES-ASW
+vlan 20
+ name SALES_T1
+vlan 21
+ name SALES_T2
+vlan 22
+ name SALES_T3
+vlan 23
+ name SALES_T4
+vlan 24
+ name SALES_T5
+vlan 99
+ name MANAGEMENT
 
+interface range fastEthernet0/1 - 5
+ switchport mode access
+
+interface fastEthernet0/1
+ switchport access vlan 20
+interface fastEthernet0/2
+ switchport access vlan 21
+interface fastEthernet0/3
+ switchport access vlan 22
+interface fastEthernet0/4
+ switchport access vlan 23
+interface fastEthernet0/5
+ switchport access vlan 24
+
+interface fastEthernet0/24
+ switchport mode trunk
+ switchport trunk allowed vlan 20-24,99
+
+end
+write
+```
+
+PROD-ASW：
+
+```cisco
+enable
+configure terminal
+hostname PROD-ASW
 vlan 30
- name DORMITORY
-vlan 40
- name LIBRARY
+ name PROD_WS1
+vlan 31
+ name PROD_WS2
+vlan 32
+ name PROD_WS3
+vlan 99
+ name MANAGEMENT
 
 interface fastEthernet0/1
  switchport mode access
@@ -108,150 +232,69 @@ interface fastEthernet0/1
 
 interface fastEthernet0/2
  switchport mode access
- switchport access vlan 40
+ switchport access vlan 31
+
+interface fastEthernet0/3
+ switchport mode access
+ switchport access vlan 32
 
 interface fastEthernet0/24
  switchport mode trunk
+ switchport trunk allowed vlan 30-32,99
 
 end
 write
 ```
 
-## 6. 配置核心交换机
+### 5.5 配置出口路由器
 
-核心交换机使用三层交换机，负责创建 VLAN、配置 VLAN 网关并进行跨 VLAN 路由。
+EDGE 需要配置内侧接口、外侧接口、回程路由、NAT 和外部访问 ACL。完整配置见 `configs/设备配置说明.md`。
 
-```cisco
-enable
-configure terminal
+配置完成后，外部网络访问策略为：
 
-ip routing
-
-vlan 10
- name TEACHING
-vlan 20
- name OFFICE
-vlan 30
- name DORMITORY
-vlan 40
- name LIBRARY
-vlan 50
- name SERVER
-vlan 99
- name MANAGEMENT
-
-interface vlan 10
- ip address 192.168.10.1 255.255.255.0
- no shutdown
-
-interface vlan 20
- ip address 192.168.20.1 255.255.255.0
- no shutdown
-
-interface vlan 30
- ip address 192.168.30.1 255.255.255.0
- no shutdown
-
-interface vlan 40
- ip address 192.168.40.1 255.255.255.0
- no shutdown
-
-interface vlan 50
- ip address 192.168.50.1 255.255.255.0
- no shutdown
-
-interface vlan 99
- ip address 192.168.99.1 255.255.255.0
- no shutdown
-```
-
-配置核心交换机连接接入交换机的 Trunk 端口：
-
-```cisco
-interface fastEthernet0/1
- switchport mode trunk
-
-interface fastEthernet0/2
- switchport mode trunk
-```
-
-配置服务器区端口：
-
-```cisco
-interface range fastEthernet0/3 - 6
- switchport mode access
- switchport access vlan 50
-```
-
-配置核心交换机到出口路由器的三层链路：
-
-```cisco
-interface gigabitEthernet0/1
- no switchport
- ip address 192.168.100.2 255.255.255.252
- no shutdown
-
-ip route 0.0.0.0 0.0.0.0 192.168.100.1
-
-end
-write
-```
-
-如果 Packet Tracer 中所选交换机端口不支持 `no switchport`，可以改用单独的出口 VLAN，例如 VLAN 100，作为核心交换机与路由器之间的三层连接。
-
-## 7. 配置出口路由器
-
-```cisco
-enable
-configure terminal
-
-interface gigabitEthernet0/0
- ip address 192.168.100.1 255.255.255.252
- no shutdown
-
-ip route 192.168.0.0 255.255.0.0 192.168.100.2
-
-end
-write
-```
-
-如需模拟外部网络，可以在路由器另一个接口连接外部服务器：
-
-```cisco
-configure terminal
-
-interface gigabitEthernet0/1
- ip address 200.1.1.1 255.255.255.0
- no shutdown
-
-end
-write
-```
-
-外部服务器可配置为：
-
-| 项目 | 配置 |
+| 外部访问目标 | 预期结果 |
 | --- | --- |
-| IP 地址 | 200.1.1.10 |
-| 子网掩码 | 255.255.255.0 |
-| 默认网关 | 200.1.1.1 |
+| `192.168.60.20` 的 HTTP/HTTPS | 允许访问 WWW |
+| `192.168.60.40` 的 SMTP/POP3/IMAP | 允许访问 MAIL |
+| `192.168.50.30` DB Server | 禁止访问 |
+| `192.168.50.40` APP Server | 禁止访问 |
+| 其他企业内部网段 | 禁止直接访问 |
 
-## 8. 配置终端和服务器地址
+## 6. 配置终端和服务器地址
+
+### 6.1 服务器地址
 
 | 设备 | IP 地址 | 子网掩码 | 默认网关 | DNS |
 | --- | --- | --- | --- | --- |
-| 教学区 PC | 192.168.10.10 | 255.255.255.0 | 192.168.10.1 | 192.168.50.10 |
-| 办公区 PC | 192.168.20.10 | 255.255.255.0 | 192.168.20.1 | 192.168.50.10 |
-| 宿舍区 PC | 192.168.30.10 | 255.255.255.0 | 192.168.30.1 | 192.168.50.10 |
-| 图书馆 PC | 192.168.40.10 | 255.255.255.0 | 192.168.40.1 | 192.168.50.10 |
 | DNS Server | 192.168.50.10 | 255.255.255.0 | 192.168.50.1 | 192.168.50.10 |
-| WWW Server | 192.168.50.20 | 255.255.255.0 | 192.168.50.1 | 192.168.50.10 |
-| FTP Server | 192.168.50.30 | 255.255.255.0 | 192.168.50.1 | 192.168.50.10 |
-| MAIL Server | 192.168.50.40 | 255.255.255.0 | 192.168.50.1 | 192.168.50.10 |
+| DB Server | 192.168.50.30 | 255.255.255.0 | 192.168.50.1 | 192.168.50.10 |
+| APP Server | 192.168.50.40 | 255.255.255.0 | 192.168.50.1 | 192.168.50.10 |
+| WWW Server | 192.168.60.20 | 255.255.255.0 | 192.168.60.1 | 192.168.50.10 |
+| MAIL Server | 192.168.60.40 | 255.255.255.0 | 192.168.60.1 | 192.168.50.10 |
 
-## 9. 配置服务器服务
+### 6.2 用户终端地址
 
-### 9.1 DNS 服务
+| 终端 | IP 地址 | 子网掩码 | 默认网关 | DNS |
+| --- | --- | --- | --- | --- |
+| GM-PC | 192.168.10.10 | 255.255.255.0 | 192.168.10.1 | 192.168.50.10 |
+| HR-PC | 192.168.11.10 | 255.255.255.0 | 192.168.11.1 | 192.168.50.10 |
+| FIN-PC | 192.168.12.10 | 255.255.255.0 | 192.168.12.1 | 192.168.50.10 |
+| TECH-PC | 192.168.13.10 | 255.255.255.0 | 192.168.13.1 | 192.168.50.10 |
+| UNION-PC | 192.168.14.10 | 255.255.255.0 | 192.168.14.1 | 192.168.50.10 |
+| SECLOG-PC | 192.168.15.10 | 255.255.255.0 | 192.168.15.1 | 192.168.50.10 |
+| SALES1-PC | 192.168.20.10 | 255.255.255.0 | 192.168.20.1 | 192.168.50.10 |
+| SALES2-PC | 192.168.21.10 | 255.255.255.0 | 192.168.21.1 | 192.168.50.10 |
+| SALES3-PC | 192.168.22.10 | 255.255.255.0 | 192.168.22.1 | 192.168.50.10 |
+| SALES4-PC | 192.168.23.10 | 255.255.255.0 | 192.168.23.1 | 192.168.50.10 |
+| SALES5-PC | 192.168.24.10 | 255.255.255.0 | 192.168.24.1 | 192.168.50.10 |
+| WS1-PC | 192.168.30.10 | 255.255.255.0 | 192.168.30.1 | 192.168.50.10 |
+| WS2-PC | 192.168.31.10 | 255.255.255.0 | 192.168.31.1 | 192.168.50.10 |
+| WS3-PC | 192.168.32.10 | 255.255.255.0 | 192.168.32.1 | 192.168.50.10 |
+| External-PC | 200.1.1.10 | 255.255.255.0 | 200.1.1.1 | 可不填 |
+
+## 7. 配置服务器服务
+
+### 7.1 DNS 服务
 
 进入 DNS Server：
 
@@ -261,13 +304,14 @@ Services -> DNS
 
 开启 DNS 服务，并添加记录：
 
-| 域名 | IP 地址 |
-| --- | --- |
-| www.school.local | 192.168.50.20 |
-| ftp.school.local | 192.168.50.30 |
-| mail.school.local | 192.168.50.40 |
+| 域名 | IP 地址 | 用途 |
+| --- | --- | --- |
+| www.company.local | 192.168.60.20 | 企业 WWW 服务 |
+| mail.company.local | 192.168.60.40 | 企业 MAIL 服务 |
+| db.company.local | 192.168.50.30 | 内部数据库服务 |
+| app.company.local | 192.168.50.40 | 内部业务服务 |
 
-### 9.2 WWW 服务
+### 7.2 WWW 服务
 
 进入 WWW Server：
 
@@ -275,23 +319,9 @@ Services -> DNS
 Services -> HTTP
 ```
 
-开启 HTTP 服务，可以修改默认网页内容，例如显示“校园门户网站”。
+开启 HTTP 服务，并把默认网页内容改为企业对外网站说明，例如“Company Web Service”。
 
-### 9.3 FTP 服务
-
-进入 FTP Server：
-
-```text
-Services -> FTP
-```
-
-开启 FTP 服务，并添加测试用户，例如：
-
-| 用户名 | 密码 | 权限 |
-| --- | --- | --- |
-| student | 123456 | Read / Write |
-
-### 9.4 MAIL 服务
+### 7.3 MAIL 服务
 
 进入 MAIL Server：
 
@@ -302,50 +332,52 @@ Services -> EMAIL
 设置邮件域名：
 
 ```text
-school.local
+company.local
 ```
 
-添加测试账号，例如：
+添加测试账号：
 
 | 用户名 | 密码 |
 | --- | --- |
 | user1 | 123456 |
 | user2 | 123456 |
+| sales1 | 123456 |
 
-## 10. 测试步骤
+## 8. 测试步骤
 
-建议按照以下顺序测试，便于定位问题：
+建议按以下顺序测试，便于定位问题：
 
-1. 在每台 PC 上 ping 自己所在 VLAN 的网关。
-2. 教学区 PC ping 办公区、宿舍区、图书馆 PC，测试跨 VLAN 通信。
-3. 各区域 PC ping 服务器区地址，例如 `192.168.50.20`。
-4. PC 浏览器访问 `http://192.168.50.20`，测试 WWW 服务。
-5. PC 浏览器访问 `http://www.school.local`，测试 DNS + WWW 服务。
-6. PC 使用 FTP 客户端访问 `ftp.school.local`，测试 FTP 服务。
-7. 使用邮件客户端配置 `mail.school.local`，测试邮件收发。
-8. PC ping `192.168.100.1`，测试到出口路由器的连通性。
-9. 如果配置外部服务器，PC ping `200.1.1.10`，测试外部网络访问。
+1. 每台 PC ping 本 VLAN 网关，例如 GM-PC ping `192.168.10.1`。
+2. 不同 VLAN 之间互 ping，例如 GM-PC ping HR-PC，验证已通过三层通信互通，而不是二层同网段通信。
+3. 用户 PC ping `192.168.50.10`，验证能访问 DNS Server。
+4. 用户 PC 访问 `http://www.company.local`，验证 DNS 和 WWW 服务。
+5. 用户 PC 配置 `mail.company.local`，验证内部邮件收发。
+6. 用户 PC ping `200.1.1.10`，验证内部用户访问外部网络。
+7. External-PC 使用浏览器访问 `http://192.168.60.20`，验证外部用户访问企业 WWW。
+8. External-PC 尝试访问或 ping `192.168.50.30`、`192.168.50.40`，预期失败，验证内部数据库和重要业务服务器禁止外部访问。
+9. 在 EDGE 上执行 `show access-lists`，查看 ACL 命中计数。
+10. 在 EDGE 上执行 `show ip nat translations`，查看内部用户访问外部网络时是否产生 NAT 记录。
 
-## 11. 常见问题检查
+## 9. 常见问题检查
 
 | 问题 | 可能原因 | 检查方法 |
 | --- | --- | --- |
-| PC ping 不通网关 | VLAN 未创建、端口 VLAN 错误、网关未开启 | `show vlan brief`、`show ip interface brief` |
-| 不同 VLAN 不能通信 | 核心交换机未开启三层路由 | 检查是否配置 `ip routing` |
-| 接入交换机下 PC 不能跨 VLAN | 上联端口不是 Trunk | 检查 `show interfaces trunk` |
-| 不能访问服务器 | 服务器 IP、网关或 VLAN 配置错误 | 检查服务器地址和核心交换机端口 VLAN |
-| 域名不能访问 | DNS 未开启或记录错误 | 检查 DNS 服务和 PC 的 DNS 地址 |
-| 不能访问外部网络 | 默认路由或回程路由缺失 | 检查核心交换机和路由器静态路由 |
+| PC ping 不通网关 | Access 端口 VLAN 错误或 SVI 未开启 | `show vlan brief`、`show ip interface brief` |
+| 不同 VLAN 不能通信 | CORE 未开启 `ip routing` 或 Trunk 未放行 VLAN | `show ip route`、`show interfaces trunk` |
+| 服务器不能访问 | CORE 服务器端口 VLAN 错误或服务器网关配置错误 | 检查服务器 IP、网关和端口 VLAN |
+| 域名不能解析 | DNS 服务未开启或 PC DNS 地址错误 | 检查 DNS Server 和 PC IP Configuration |
+| 外部不能访问 WWW | EDGE ACL、路由或 WWW 服务配置错误 | `show access-lists`、检查 HTTP 服务 |
+| 外部能访问内部服务器 | EDGE 外侧 ACL 未应用或规则顺序错误 | `show running-config`、`show access-lists` |
+| 内部不能访问外部网络 | 默认路由、回程路由或 NAT 配置错误 | `show ip route`、`show ip nat translations` |
 
-## 12. 最小实现建议
+## 10. 最小实现建议
 
-如果时间有限，可以先完成最小可行版本：
+如果时间有限，先完成以下最小版本：
 
-1. Router 1 台。
-2. Core Switch 1 台。
-3. Access Switch 2 台。
-4. VLAN 10、20、30、50。
-5. PC 3 台。
-6. DNS/WWW Server 1 台。
+1. CORE、EDGE、ADMIN-ASW、SALES-ASW、PROD-ASW 各 1 台。
+2. 每个接入交换机先接 1-2 台 PC。
+3. 先创建 VLAN 10、11、20、30、50、60。
+4. 先部署 DNS、WWW、DB 三台服务器。
+5. 先验证内部用户访问 WWW、外部用户访问 WWW、外部用户不能访问 DB。
 
-先保证不同 VLAN 能互通，PC 能通过域名访问校园门户网站，再逐步补充 FTP、MAIL、图书馆区、管理区和外部网络模拟。
+最小版本跑通后，再补齐所有部门、团队、车间和 MAIL 服务。
